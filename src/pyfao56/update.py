@@ -61,7 +61,7 @@ class Update:
 
         self.comment = 'Comments: ' + comment.strip()
         self.tmstmp = datetime.datetime.now()
-        self.udata = pd.DataFrame(columns=['Kcb','h','fc'])
+        self.udata = pd.DataFrame(columns=['Kcb','h','fc', 'OETcadj'])
 
         if filepath is not None:
             self.loadfile(filepath)
@@ -80,7 +80,7 @@ class Update:
            '{:s}\n'
            '{:s}\n'
            '{:s}\n'
-           'Year-DOY    Kcb      h     fc\n'
+           'Year-DOY    Kcb      h     fc     OETcadj\n'
           ).format(ast,timestamp,ast,self.comment,ast)
         if not self.udata.empty:
             s += self.udata.to_string(header=False, na_rep='   NaN')
@@ -140,14 +140,14 @@ class Update:
                 ts = lines[3].strip().split('stamp:')[1].strip()
                 ts = datetime.datetime.strptime(ts,'%m/%d/%Y %H:%M:%S')
                 self.tmstmp = ts
-            self.udata = pd.DataFrame(columns=['Kcb','h','fc'])
+            self.udata = pd.DataFrame(columns=['Kcb','h','fc','OETcadj'])
             for line in lines[endast+2:]:
                 line = line.strip().split()
                 year = line[0][:4]
                 doy = line[0][-3:]
                 key = '{:04d}-{:03d}'.format(int(year),int(doy))
                 self.udata.loc[key] = [float(line[1]),float(line[2]),
-                                       float(line[3])]
+                                       float(line[3]),float(line[4])] #OETcadj (DG)
 
     def customload(self):
         """Override this function to customize loading update data."""
@@ -162,7 +162,7 @@ class Update:
         index : str
             A year-doy string (yyyy-ddd) as an index to self.udata
         var : str
-            A column variable to return ('Kcb','h','fc')
+            A column variable to return ('Kcb','h','fc''OETcadj')
         """
 
         try:

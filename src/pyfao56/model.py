@@ -211,7 +211,7 @@ class Model:
         self.cnames = ['Year','DOY','DOW','Date','ETref','tKcb','Kcb',
                        'h','Kcmax','fc','fw','few','De','Kr','Ke','E',
                        'DPe','Kc','ETc','TAW','TAWrmax','TAWb','Zr','p',
-                       'RAW','Ks','Kcadj','ETcadj','T','DP','Dinc','Dr',
+                       'RAW','Ks','Kcadj','ETcadj','OETcadj','T','DP','Dinc','Dr',
                        'fDr','Drmax','fDrmax','Db','fDb','Irrig',
                        'IrrLoss','Rain','Runoff','Year','DOY','DOW',
                        'Date']
@@ -243,14 +243,14 @@ class Model:
                 'TAWrmax':'{:7.3f}'.format,'TAWb':'{:7.3f}'.format,
                 'Zr':'{:5.3f}'.format,'p':'{:5.3f}'.format,
                 'RAW':'{:7.3f}'.format,'Ks':'{:5.3f}'.format,
-                'Kcadj':'{:5.3f}'.format,'ETcadj':'{:6.3f}'.format,
+                'Kcadj':'{:5.3f}'.format,'ETcadj':'{:6.3f}'.format,'OETcadj':'{:6.3f}'.format,
                 'T':'{:6.3f}'.format,'DP':'{:7.3f}'.format,
                 'Dinc':'{:7.3f}'.format,'Dr':'{:7.3f}'.format,
                 'fDr':'{:7.3f}'.format,'Drmax':'{:7.3f}'.format,
                 'fDrmax':'{:7.3f}'.format,'Db':'{:7.3f}'.format,
                 'fDb':'{:7.3f}'.format,'Irrig':'{:7.3f}'.format,
                 'IrrLoss':'{:7.3f}'.format,'Rain':'{:7.3f}'.format,
-                'Runoff':'{:7.3f}'.format}
+                'Runoff':'{:7.3f}'.format} #need to ad OETcadj here
         ast='*'*72
         s = ('{:s}\n'
              'pyfao56: FAO-56 Evapotranspiration in Python\n'
@@ -265,7 +265,7 @@ class Model:
              'Year-DOY  Year  DOY  DOW      Date  ETref  tKcb   Kcb'
              '     h Kcmax    fc    fw   few      De    Kr    Ke      E'
              '     DPe    Kc    ETc     TAW TAWrmax    TAWb    Zr     p'
-             '     RAW    Ks Kcadj ETcadj      T      DP    Dinc'
+             '     RAW    Ks Kcadj ETcadj OETcadj      T      DP    Dinc'
              '      Dr     fDr   Drmax  fDrmax      Db     fDb'
              '   Irrig IrrLoss    Rain  Runoff  Year  DOY  DOW'
              '      Date\n'
@@ -276,7 +276,7 @@ class Model:
                       solmthd,
                       ast,
                       self.comment,
-                      ast)
+                      ast) #need to ad OETcadj here
         if not self.odata.empty:
             s += self.odata.to_string(header=False,formatters=fmts)
         return s
@@ -337,7 +337,7 @@ class Model:
         if not self.odata.empty:
             keys = ['ETref','ETc','ETcadj','E','T','DP','Irrig',
                     'IrrLoss','Rain','Runoff','Dr_ini','Dr_end',
-                    'Drmax_ini','Drmax_end']
+                    'Drmax_ini','Drmax_end'] #need to ad OETcadj here
             for key in keys:
                 s += '{:8.3f} : {:s}\n'.format(self.swbdata[key],key)
 
@@ -442,6 +442,7 @@ class Model:
             io.Db = io.Drmax - io.Dr
             #Initial total available water in bottom layer (TAWb, mm)
             io.TAWb = io.TAWrmax - io.TAW
+            io.De = 0 # to mimic field capacity conditions (DG) just for initial chk, need to apply better way than hard encoding
         #Initial root zone soil water depletion fraction (fDr, mm/mm)
         io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
         io.Ks = 1.0
@@ -638,10 +639,12 @@ class Model:
             io.updKcb = float('NaN')
             io.updh = float('NaN')
             io.updfc = float('NaN')
+            io.updOETcadj = float('NaN') #added openET update (DG)
             if self.upd is not None:
                 io.updKcb = self.upd.getdata(mykey,'Kcb')
                 io.updh = self.upd.getdata(mykey,'h')
                 io.updfc = self.upd.getdata(mykey,'fc')
+                io.updOETcadj = self.upd.getdata(mykey,'OETcadj') #added openET update (DG)
 
             #Advance timestep
             self._advance(io)
@@ -655,9 +658,9 @@ class Model:
                     io.h, io.Kcmax, io.fc, io.fw, io.few, io.De, io.Kr,
                     io.Ke, io.E, io.DPe, io.Kc, io.ETc, io.TAW,
                     io.TAWrmax, io.TAWb, io.Zr, io.p, io.RAW, io.Ks,
-                    io.Kcadj, io.ETcadj, io.T, io.DP, io.Dinc, io.Dr,
+                    io.Kcadj, io.ETcadj, io.OETcadj, io.T, io.DP, io.Dinc, io.Dr,
                     io.fDr, io.Drmax, io.fDrmax, io.Db, io.fDb, io.idep,
-                    io.irrloss, io.rain, io.runoff, year, doy, dow, dat]
+                    io.irrloss, io.rain, io.runoff, year, doy, dow, dat] #added openET update (DG)
             self.odata.loc[mykey] = data
 
             tcurrent = tcurrent + tdelta
@@ -720,8 +723,9 @@ class Model:
         if io.updh > 0: io.h = io.updh
 
         #Root depth (Zr, m) - FAO-56 page 279
-        io.Zr = max([io.Zrini + (io.Zrmax-io.Zrini)*(io.tKcb-io.Kcbini)/
-                     (io.Kcbmid-io.Kcbini),0.001,io.Zr])
+        io.Zr = max([io.Zrini + (io.Zrmax-io.Zrini)*(io.Kcb-io.Kcbini)/
+                     (io.Kcbmid-io.Kcbini),0.001,io.Zr]) #for root growth, we were using tkcb but it should be kcb to make sure sure it use correct value
+        #if we are using update class for kcb
 
         #Upper limit crop coefficient (Kcmax) - FAO-56 Eq. 72
         u2 = io.wndsp * (4.87/math.log(67.8*io.wndht-5.42))
@@ -854,15 +858,19 @@ class Model:
         #Adjusted crop transpiration (T, mm)
         io.T = (io.Ks * io.Kcb) * io.ETref
 
+        #Updated ETcadj using openET data and we will call the updated as OETcadj
+        io.OETcadj = io.ETcadj
+        if io.updOETcadj >0: io.OETcadj = io.updOETcadj
+
         #Water balance methods
         if io.solmthd == 'D':
             #Deep percolation (DP, mm) - FAO-56 Eq. 88
             #Boundary layer is considered at the root zone depth (Zr)
-            DP = effrain + effirr - io.ETcadj - io.Dr
+            DP = effrain + effirr - io.OETcadj - io.Dr
             io.DP = max([DP,0.0])
 
             #Root zone soil water depletion (Dr,mm) - FAO-56 Eqs.85 & 86
-            Dr = io.Dr - effrain - effirr + io.ETcadj + io.DP
+            Dr = io.Dr - effrain - effirr + io.OETcadj + io.DP
             io.Dr = sorted([0.0, Dr, io.TAW])[1]
 
             #Root zone soil water depletion fraction (fDr, mm/mm)
@@ -878,7 +886,7 @@ class Model:
         elif io.solmthd == 'L':
             #Deep percolation (DP, mm)
             #Boundary layer is at the max root depth (Zrmax)
-            DP = effrain + effirr - io.ETcadj - io.Drmax
+            DP = effrain + effirr - io.OETcadj - io.Drmax
             io.DP = max([DP,0.0])
 
             #Depletion increment due to root growth (Dinc, mm)
@@ -889,14 +897,14 @@ class Model:
                 io.Dinc = 0.0
 
             #Root zone soil water depletion (Dr, mm)
-            Dr = io.Dr - effrain - effirr + io.ETcadj + io.Dinc
+            Dr = io.Dr - effrain - effirr + io.OETcadj + io.Dinc
             io.Dr = sorted([0.0, Dr, io.TAW])[1]
 
             #Root zone soil water depletion fraction (fDr, mm/mm)
             io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
 
             #Soil water depletion at max root depth (Drmax, mm)
-            Drmax = io.Drmax - effrain - effirr + io.ETcadj + io.DP
+            Drmax = io.Drmax - effrain - effirr + io.OETcadj + io.DP
             io.Drmax = sorted([0.0, Drmax, io.TAWrmax])[1]
 
             #Soil water depletion fraction at Zrmax (fDrmax, mm/mm)
