@@ -212,9 +212,9 @@ class Model:
                        'h','Kcmax','fc','fw','few','De','Kr','Ke','E',
                        'DPe','Kc','ETc','TAW','TAWrmax','TAWb','Zr','p',
                        'RAW','Ks','Kcadj','ETcadj','OETcadj','T','DP','Dinc','Dr',
-                       'fDr','Drmax','fDrmax','Db','fDb','Irrig',
+                       'mDr','fDr','Drmax','fDrmax','Db','fDb','Irrig',
                        'IrrLoss','Rain','Runoff','Year','DOY','DOW',
-                       'Date']
+                       'Date'] #added OETcadj and mDr #DG
         self.odata = pd.DataFrame(columns=self.cnames)
 
     def __str__(self):
@@ -250,7 +250,7 @@ class Model:
                 'fDrmax':'{:7.3f}'.format,'Db':'{:7.3f}'.format,
                 'fDb':'{:7.3f}'.format,'Irrig':'{:7.3f}'.format,
                 'IrrLoss':'{:7.3f}'.format,'Rain':'{:7.3f}'.format,
-                'Runoff':'{:7.3f}'.format} #need to ad OETcadj here
+                'Runoff':'{:7.3f}'.format} #need to add OETcadj and mDr here
         ast='*'*72
         s = ('{:s}\n'
              'pyfao56: FAO-56 Evapotranspiration in Python\n'
@@ -640,11 +640,16 @@ class Model:
             io.updh = float('NaN')
             io.updfc = float('NaN')
             io.updOETcadj = float('NaN') #added openET update (DG)
+            io.updmDr = float('NaN')  #added mDr update (DG)
+
+            io.mDr = io.Dr #very mediocre way to set but will change (DG)
             if self.upd is not None:
                 io.updKcb = self.upd.getdata(mykey,'Kcb')
                 io.updh = self.upd.getdata(mykey,'h')
                 io.updfc = self.upd.getdata(mykey,'fc')
                 io.updOETcadj = self.upd.getdata(mykey,'OETcadj') #added openET update (DG)
+                io.updmDr = self.upd.getdata(mykey,'mDr')  #added mDr update (DG)
+                io.mDr = io.updmDr
 
             #Advance timestep
             self._advance(io)
@@ -659,8 +664,8 @@ class Model:
                     io.Ke, io.E, io.DPe, io.Kc, io.ETc, io.TAW,
                     io.TAWrmax, io.TAWb, io.Zr, io.p, io.RAW, io.Ks,
                     io.Kcadj, io.ETcadj, io.OETcadj, io.T, io.DP, io.Dinc, io.Dr,
-                    io.fDr, io.Drmax, io.fDrmax, io.Db, io.fDb, io.idep,
-                    io.irrloss, io.rain, io.runoff, year, doy, dow, dat] #added openET update (DG)
+                    io.mDr, io.fDr, io.Drmax, io.fDrmax, io.Db, io.fDb, io.idep,
+                    io.irrloss, io.rain, io.runoff, year, doy, dow, dat] #added ET and mDr update (DG)
             self.odata.loc[mykey] = data
 
             tcurrent = tcurrent + tdelta
@@ -840,7 +845,7 @@ class Model:
         #Transpiration reduction factor (Ks, 0.0-1.0)
         if io.aq_Ks is True:
             #Ks method from AquaCrop
-            rSWD = io.Dr/io.TAW
+            rSWD = io.Dr/io.TAW #haven't changed with mDr here DG
             Drel = (rSWD-io.p)/(1.0-io.p)
             sf = 1.5
             aqKs = 1.0-(math.exp(sf*Drel)-1.0)/(math.exp(sf)-1.0)
@@ -858,7 +863,7 @@ class Model:
         #Adjusted crop transpiration (T, mm)
         io.T = (io.Ks * io.Kcb) * io.ETref
 
-        #Updated ETcadj using openET data and we will call the updated as OETcadj
+        #Updated ETcadj using observed data and we will call the updated as OETcadj
         io.OETcadj = io.ETcadj
         if io.updOETcadj >0: io.OETcadj = io.updOETcadj
 
@@ -866,15 +871,18 @@ class Model:
         if io.solmthd == 'D':
             #Deep percolation (DP, mm) - FAO-56 Eq. 88
             #Boundary layer is considered at the root zone depth (Zr)
-            DP = effrain + effirr - io.OETcadj - io.Dr
+            DP = effrain + effirr - io.OETcadj - io.mDr
             io.DP = max([DP,0.0])
 
             #Root zone soil water depletion (Dr,mm) - FAO-56 Eqs.85 & 86
-            Dr = io.Dr - effrain - effirr + io.OETcadj + io.DP
+            Dr = io.mDr - effrain - effirr + io.OETcadj + io.DP
             io.Dr = sorted([0.0, Dr, io.TAW])[1]
 
+            # Update mDr using measured data
+            io.mDr = io.updmDr if pd.notna(io.updmDr) else io.Dr #here to use not na or gt 0? #DG
+
             #Root zone soil water depletion fraction (fDr, mm/mm)
-            io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
+            io.fDr = 1.0 - ((io.TAW - io.mDr) / io.TAW)
 
             #By default, FAO-56 doesn't consider the following variables
             io.Dinc = -99.999
@@ -897,11 +905,14 @@ class Model:
                 io.Dinc = 0.0
 
             #Root zone soil water depletion (Dr, mm)
-            Dr = io.Dr - effrain - effirr + io.OETcadj + io.Dinc
+            Dr = io.mDr - effrain - effirr + io.OETcadj + io.Dinc
             io.Dr = sorted([0.0, Dr, io.TAW])[1]
 
+            # Update mDr using measured data
+            io.mDr = io.updmDr if pd.notna(io.updmDr) else io.Dr #here to use not na or gt 0? #DG
+
             #Root zone soil water depletion fraction (fDr, mm/mm)
-            io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
+            io.fDr = 1.0 - ((io.TAW - io.mDr) / io.TAW)
 
             #Soil water depletion at max root depth (Drmax, mm)
             Drmax = io.Drmax - effrain - effirr + io.OETcadj + io.DP
@@ -911,7 +922,7 @@ class Model:
             io.fDrmax = 1.0 - ((io.TAWrmax - io.Drmax) / io.TAWrmax)
 
             #Soil water depletion in the bottom layer (Db, mm)
-            Db = io.Drmax - io.Dr
+            Db = io.Drmax - io.mDr
             io.Db = sorted([0.0, Db, io.TAWb])[1]
 
             #Bottom layer soil water depletion fraction (fDb, mm/mm)

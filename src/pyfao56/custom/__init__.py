@@ -16,3 +16,4 @@ The custom subpackage contains the following modules:
 
 from .azmet_maricopa import AzmetMaricopa
 from .example_soil import ExampleSoil
+from .weather_df import WeatherDF
