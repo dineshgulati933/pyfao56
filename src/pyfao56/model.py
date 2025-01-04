@@ -456,6 +456,8 @@ class Model:
         io.aq_Ks  = self.aq_Ks
         self.odata = pd.DataFrame(columns=self.cnames)
 
+        io.mDr = io.Dr #very mediocre way to set but will change (DG)
+
         while tcurrent <= self.endDate:
             mykey = tcurrent.strftime('%Y-%j')
 
@@ -642,14 +644,12 @@ class Model:
             io.updOETcadj = float('NaN') #added openET update (DG)
             io.updmDr = float('NaN')  #added mDr update (DG)
 
-            io.mDr = io.Dr #very mediocre way to set but will change (DG)
             if self.upd is not None:
                 io.updKcb = self.upd.getdata(mykey,'Kcb')
                 io.updh = self.upd.getdata(mykey,'h')
                 io.updfc = self.upd.getdata(mykey,'fc')
                 io.updOETcadj = self.upd.getdata(mykey,'OETcadj') #added openET update (DG)
                 io.updmDr = self.upd.getdata(mykey,'mDr')  #added mDr update (DG)
-                io.mDr = io.updmDr
 
             #Advance timestep
             self._advance(io)
