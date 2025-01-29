@@ -387,6 +387,7 @@ class Model:
             io.TEW = 1000. * (io.thetaFC - 0.50 * io.thetaWP) * io.Ze
             #Initial depth of evaporation (De, mm) - FAO-56 page 153
             io.De = 1000. * (io.thetaFC - 0.50 * io.thetaWP) * io.Ze
+            io.De = 0. # to mimic field capacity conditions (DG) just for initial chk, need to apply better way than hard encoding
             #Initial root zone depletion (Dr, mm) - FAO-56 Eq. 87
             io.Dr = 1000. * (io.thetaFC - io.theta0) * io.Zrini
             #Initial soil depletion for max root depth (Drmax, mm)
@@ -442,7 +443,7 @@ class Model:
             io.Db = io.Drmax - io.Dr
             #Initial total available water in bottom layer (TAWb, mm)
             io.TAWb = io.TAWrmax - io.TAW
-            io.De = 0 # to mimic field capacity conditions (DG) just for initial chk, need to apply better way than hard encoding
+            #io.De = 0 # to mimic field capacity conditions (DG) just for initial chk, need to apply better way than hard encoding
         #Initial root zone soil water depletion fraction (fDr, mm/mm)
         io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
         io.Ks = 1.0
