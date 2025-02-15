@@ -29,7 +29,7 @@ class SoilWaterSeriesDF(SoilWaterSeries):
         
         # Drop rows with NaN in critical columns only
         required_columns = list(range(len(self.mdpths)))  # Columns for soil water contents
-        self.df.dropna(subset=self.df.columns[required_columns], inplace=True)
+        #self.df.dropna(subset=self.df.columns[required_columns], inplace=True)
 
 
         # Insert depth columns based on mdpths
