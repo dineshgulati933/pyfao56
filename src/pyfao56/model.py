@@ -212,9 +212,9 @@ class Model:
                        'h','Kcmax','fc','fw','few','De','Kr','Ke','E',
                        'DPe','Kc','ETc','TAW','TAWrmax','TAWb','Zr','p',
                        'RAW','Ks','Kcadj','ETcadj','OETcadj','T','DP','Dinc','Dr',
-                       'mDr','fDr','Drmax','fDrmax','Db','fDb','Irrig',
+                       'mDr','fDr','Drmax','mDrmax','fDrmax','Db','fDb','Irrig',
                        'IrrLoss','Rain','Runoff','Year','DOY','DOW',
-                       'Date'] #added OETcadj and mDr #DG
+                       'Date'] #added OETcadj and mDr and mDrmax #DG
         self.odata = pd.DataFrame(columns=self.cnames)
 
     def __str__(self):
@@ -458,6 +458,7 @@ class Model:
         self.odata = pd.DataFrame(columns=self.cnames)
 
         io.mDr = io.Dr #very mediocre way to set but will change (DG)
+        io.mDrmax = io.Drmax #very mediocre way to set but will change (DG)
 
         while tcurrent <= self.endDate:
             mykey = tcurrent.strftime('%Y-%j')
@@ -644,6 +645,7 @@ class Model:
             io.updfc = float('NaN')
             io.updOETcadj = float('NaN') #added openET update (DG)
             io.updmDr = float('NaN')  #added mDr update (DG)
+            io.updmDrmax = float('NaN')  #added mDrmax update (DG)
 
             if self.upd is not None:
                 io.updKcb = self.upd.getdata(mykey,'Kcb')
@@ -651,6 +653,7 @@ class Model:
                 io.updfc = self.upd.getdata(mykey,'fc')
                 io.updOETcadj = self.upd.getdata(mykey,'OETcadj') #added openET update (DG)
                 io.updmDr = self.upd.getdata(mykey,'mDr')  #added mDr update (DG)
+                io.updmDrmax = self.upd.getdata(mykey,'mDrmax')  #added mDrmax update (DG)
 
             #Advance timestep
             self._advance(io)
@@ -665,8 +668,8 @@ class Model:
                     io.Ke, io.E, io.DPe, io.Kc, io.ETc, io.TAW,
                     io.TAWrmax, io.TAWb, io.Zr, io.p, io.RAW, io.Ks,
                     io.Kcadj, io.ETcadj, io.OETcadj, io.T, io.DP, io.Dinc, io.Dr,
-                    io.mDr, io.fDr, io.Drmax, io.fDrmax, io.Db, io.fDb, io.idep,
-                    io.irrloss, io.rain, io.runoff, year, doy, dow, dat] #added ET and mDr update (DG)
+                    io.mDr, io.fDr, io.Drmax, io.mDrmax, io.fDrmax, io.Db, io.fDb, io.idep,
+                    io.irrloss, io.rain, io.runoff, year, doy, dow, dat] #added ET and mDr, mDrmax update (DG)
             self.odata.loc[mykey] = data
 
             tcurrent = tcurrent + tdelta
@@ -895,7 +898,7 @@ class Model:
         elif io.solmthd == 'L':
             #Deep percolation (DP, mm)
             #Boundary layer is at the max root depth (Zrmax)
-            DP = effrain + effirr - io.OETcadj - io.Drmax
+            DP = effrain + effirr - io.OETcadj - io.mDrmax
             io.DP = max([DP,0.0])
 
             #Depletion increment due to root growth (Dinc, mm)
@@ -916,14 +919,17 @@ class Model:
             io.fDr = 1.0 - ((io.TAW - io.mDr) / io.TAW)
 
             #Soil water depletion at max root depth (Drmax, mm)
-            Drmax = io.Drmax - effrain - effirr + io.OETcadj + io.DP
+            Drmax = io.mDrmax - effrain - effirr + io.OETcadj + io.DP
             io.Drmax = sorted([0.0, Drmax, io.TAWrmax])[1]
 
+            #update mDrmax using measured data
+            io.mDrmax = io.updmDrmax if pd.notna(io.updmDrmax) else io.Drmax #here to use not na or gt 0? #DG
+
             #Soil water depletion fraction at Zrmax (fDrmax, mm/mm)
-            io.fDrmax = 1.0 - ((io.TAWrmax - io.Drmax) / io.TAWrmax)
+            io.fDrmax = 1.0 - ((io.TAWrmax - io.mDrmax) / io.TAWrmax)
 
             #Soil water depletion in the bottom layer (Db, mm)
-            Db = io.Drmax - io.mDr
+            Db = io.mDrmax - io.mDr
             io.Db = sorted([0.0, Db, io.TAWb])[1]
 
             #Bottom layer soil water depletion fraction (fDb, mm/mm)
