@@ -125,7 +125,7 @@ class BlueGreen:
         sep, saw = 0.0, 0.0  # initialize EP and AW storage
 
         for idx, row in df.iterrows():
-            ETa = row['OETcadj']
+            ETa = row['OETcadj'] # OETcadj will be same as ETcadj if not assimilating ETa
             RO = row['Runoff']
             DP = row['DP']
             Rain = row['Rain']
