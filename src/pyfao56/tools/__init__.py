@@ -23,3 +23,4 @@ from .soil_water import SoilWaterSeries
 from .visualization import Visualization
 from .statistics import Statistics
 from .blue_green import BlueGreen
+from .blue_green2 import BlueGreen2
