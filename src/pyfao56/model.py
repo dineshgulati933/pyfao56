@@ -112,7 +112,7 @@ class Model:
         index - Year and day of year as string ('yyyy-ddd')
         columns - ['Year','DOY','DOW','Date','ETref','Kcm','ETcm',
                    'tKcb','Kcb','ETcb','h','Kcmax','ETmax','fc','fw',
-                   'few','De','Kr','Ke','E','DPe','Kc','ETc','TAW',
+                   'few','De','mDe','Kr','Ke','E','DPe','Kc','ETc','TAW',
                    'TAWrmax','TAWb','Zr','p','RAW','Ks','Ka','ETa','T',
                    'DP','Dinc','Dr','fDr','Drmax','fDrmax','Db','fDb',
                    'Ksend','Irrig','IrrLoss','Rain','Runoff','Year',
@@ -134,6 +134,8 @@ class Model:
             fw      - Fraction soil surface wetted, FAO-56 Table 20
             few     - Exposed & wetted soil fraction, FAO-56 Eq. 75
             De      - Cumulative depth of evaporation, FAO-56 Eqs. 77&78
+            mDe     - Assimilated evaporation layer depletion (mm):
+                      measured from updates if given, otherwise De
             Kr      - Evaporation reduction coefficient, FAO-56 Eq. 74
             Ke      - Evaporation coefficient, FAO-56 Eq. 71
             E       - Soil water evaporation (mm), FAO-56 Eq. 69
@@ -250,7 +252,7 @@ class Model:
         self.tmstmp = datetime.datetime.now()
         self.cnames = ['Year','DOY','DOW','Date','ETref','Kcm','ETcm',
                        'tKcb','Kcb','ETcb','h','Kcmax','ETmax','fc','fw',
-                       'few','De','Kr','Ke','E','DPe','Kc','ETc','TAW',
+                       'few','De','mDe','Kr','Ke','E','DPe','Kc','ETc','TAW',
                        'TAWrmax','TAWb','Zr','p','RAW','Ks','Ka','ETa',
                        'OETa','T','DP','Dinc','Dr','mDr','fDr','Drmax',
                        'mDrmax','fDrmax','Db','fDb','Ksend','Irrig',
@@ -278,7 +280,7 @@ class Model:
                 'h':'{:5.3f}'.format,'Kcmax':'{:5.3f}'.format,
                 'ETmax':'{:6.3f}'.format,'fc':'{:5.3f}'.format,
                 'fw':'{:5.3f}'.format,'few':'{:5.3f}'.format,
-                'De':'{:7.3f}'.format,'Kr':'{:5.3f}'.format,
+                'De':'{:7.3f}'.format,'mDe':'{:7.3f}'.format,'Kr':'{:5.3f}'.format,
                 'Ke':'{:5.3f}'.format,'E':'{:6.3f}'.format,
                 'DPe':'{:7.3f}'.format,'Kc':'{:5.3f}'.format,
                 'ETc':'{:6.3f}'.format,'TAW':'{:7.3f}'.format,
@@ -310,7 +312,7 @@ class Model:
              '{:s}\n'
              'Year-DOY  Year  DOY  DOW      Date  ETref   Kcm   ETcm'
              '  tKcb   Kcb   ETcb     h Kcmax  ETmax    fc    fw   few'
-             '      De    Kr    Ke      E     DPe    Kc    ETc     TAW'
+             '      De     mDe    Kr    Ke      E     DPe    Kc    ETc     TAW'
              ' TAWrmax    TAWb    Zr     p     RAW    Ks    Ka    ETa'
              '   OETa      T      DP    Dinc      Dr     mDr     fDr'
              '   Drmax  mDrmax  fDrmax'
@@ -525,6 +527,7 @@ class Model:
         #Assimilated depletion starts from the simulated initial values
         io.mDr = io.Dr
         io.mDrmax = io.Drmax
+        io.mDe = io.De
 
         #Adjustments of Kcmmid (FAO-56 Eq. 62), Kcmend (FAO-56 Eq. 65),
         #and Kcbmid and Kcbend (FAO-56 Eq. 70) based on minimum relative
@@ -759,6 +762,7 @@ class Model:
             io.updOETa = float('NaN')
             io.updmDr = float('NaN')
             io.updmDrmax = float('NaN')
+            io.updmDe = float('NaN')
             if self.upd is not None:
                 io.updKcb = self.upd.getdata(mykey,'Kcb')
                 io.updh = self.upd.getdata(mykey,'h')
@@ -766,6 +770,7 @@ class Model:
                 io.updOETa = self.upd.getdata(mykey,'OETa')
                 io.updmDr = self.upd.getdata(mykey,'mDr')
                 io.updmDrmax = self.upd.getdata(mykey,'mDrmax')
+                io.updmDe = self.upd.getdata(mykey,'mDe')
 
             #Advance timestep
             self._advance(io)
@@ -777,7 +782,7 @@ class Model:
             dat = tcurrent.strftime('%m/%d/%y') #Date mm/dd/yy
             data = [year, doy, dow, dat, io.ETref, io.Kcm, io.ETcm,
                     io.tKcb, io.Kcb, io.ETcb, io.h, io.Kcmax, io.ETmax,
-                    io.fc, io.fw, io.few, io.De, io.Kr, io.Ke, io.E,
+                    io.fc, io.fw, io.few, io.De, io.mDe, io.Kr, io.Ke, io.E,
                     io.DPe, io.Kc, io.ETc, io.TAW, io.TAWrmax, io.TAWb,
                     io.Zr, io.p, io.RAW, io.Ks, io.Ka, io.ETa, io.OETa,
                     io.T, io.DP, io.Dinc, io.Dr, io.mDr, io.fDr,
@@ -899,13 +904,13 @@ class Model:
             #Method per ASCE (2016) Eqs. 14-12 to 14-20, page 451-454
             CN1 = io.CN2/(2.281-0.01281*io.CN2) #ASCE (2016) Eq. 14-14
             CN3 = io.CN2/(0.427+0.00573*io.CN2) #ASCE (2016) Eq. 14-15
-            if io.De <= 0.5*io.REW:
+            if io.mDe <= 0.5*io.REW:
                 CN = CN3 #ASCE (2016) Eq. 14-18
-            elif io.De >= 0.7*io.REW+0.3*io.TEW:
+            elif io.mDe >= 0.7*io.REW+0.3*io.TEW:
                 CN = CN1 #ASCE (2016) Eq. 14-19
             else:
-                CN = (io.De-0.5*io.REW)*CN1
-                CN = CN+(0.7*io.REW+0.3*io.TEW-io.De)*CN3
+                CN = (io.mDe-0.5*io.REW)*CN1
+                CN = CN+(0.7*io.REW+0.3*io.TEW-io.mDe)*CN3
                 CN = CN/(0.2*io.REW+0.3*io.TEW) #ASCE (2016) Eq. 14-20
             storage = 250.*((100./CN)-1.) #ASCE (2016) Eq. 14-12
             if io.rain > 0.2*storage:
@@ -933,7 +938,7 @@ class Model:
         io.few = sorted([0.01,min([1.0-io.fc, io.fw]),1.0])[1]
 
         #Evaporation reduction coefficient (Kr, 0-1) - FAO-56 Eq. 74
-        io.Kr = sorted([0.0,(io.TEW-io.De)/(io.TEW-io.REW),1.0])[1]
+        io.Kr = sorted([0.0,(io.TEW-io.mDe)/(io.TEW-io.REW),1.0])[1]
 
         #Evaporation coefficient (Ke) - FAO-56 Eq. 71
         io.Ke = min([io.Kr*(io.Kcmax-io.Kcb), io.few*io.Kcmax])
@@ -942,11 +947,13 @@ class Model:
         io.E = io.Ke * io.ETref
 
         #Deep percolation under exposed soil (DPe, mm) - FAO-56 Eq. 79
-        io.DPe = max([effrain + effirr/io.fw - io.De, 0.0])
+        io.DPe = max([effrain + effirr/io.fw - io.mDe, 0.0])
 
         #Cumulative depth of evaporation (De, mm) - FAO-56 Eqs. 77 & 78
-        De = io.De - effrain - effirr/io.fw + io.E/io.few + io.DPe
+        De = io.mDe - effrain - effirr/io.fw + io.E/io.few + io.DPe
         io.De = sorted([0.0,De,io.TEW])[1]
+        #Assimilated evaporation layer depletion (mDe, mm)
+        io.mDe = sorted([0.0,io.updmDe,io.TEW])[1] if pd.notna(io.updmDe) else io.De
 
         #Dual drop coefficient, standard conditions (Kc) - FAO-56 Eq. 69
         io.Kc = io.Ke + io.Kcb

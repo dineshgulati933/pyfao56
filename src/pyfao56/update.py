@@ -17,7 +17,7 @@ The update.py module contains the following:
 import pandas as pd
 import datetime
 
-COLUMNS = ['Kcb','h','fc','OETa','mDr','mDrmax']
+COLUMNS = ['Kcb','h','fc','OETa','mDr','mDrmax','mDe']
 
 class Update:
     """A class for managing update data for FAO-56 calculations.
@@ -25,7 +25,8 @@ class Update:
     At this time, update methods are available for the basal crop
     coefficient (Kcb), the plant height (h), the crop cover (fc), observed
     actual evapotranspiration (OETa), and measured soil water depletion in
-    the root zone (mDr) and to the maximum root depth (mDrmax).
+    the root zone (mDr), to the maximum root depth (mDrmax) and in the
+    evaporation layer (mDe).
 
     Attributes
     ----------
@@ -43,6 +44,7 @@ class Update:
             OETa   - Observed actual crop evapotranspiration (mm)
             mDr    - Measured root zone soil water depletion (mm)
             mDrmax - Measured soil water depletion at Zrmax (mm)
+            mDe    - Measured evaporation layer depletion (mm)
 
     Methods
     -------
@@ -90,7 +92,7 @@ class Update:
            '{:s}\n'
            '{:s}\n'
            '{:s}\n'
-           'Year-DOY    Kcb      h     fc   OETa    mDr mDrmax\n'
+           'Year-DOY    Kcb      h     fc   OETa    mDr mDrmax    mDe\n'
           ).format(ast,timestamp,ast,self.comment,ast)
         if not self.udata.empty:
             s += self.udata.to_string(header=False, na_rep='   NaN')
@@ -175,7 +177,7 @@ class Update:
             A year-doy string (yyyy-ddd) as an index to self.udata
         var : str
             A column variable to return ('Kcb','h','fc','OETa','mDr',
-            'mDrmax')
+            'mDrmax','mDe')
         """
 
         try:

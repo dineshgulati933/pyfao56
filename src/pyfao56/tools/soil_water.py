@@ -114,7 +114,7 @@ class SoilWaterSeries:
             for i in range(n):
                 s += ' SWC{:02d}'.format(i+1)
             s += '    Zr      mDr   mDrmax   mfDr mfDrmax mSWCr mSWCrmax'
-            s += '    mKs\n'
+            s += '    mKs      mDe\n'
             for key in sorted(self.swdata.keys()):
                 s += self.swdata[key].__str__() + '\n'
         return s
@@ -274,7 +274,7 @@ class SoilWaterSeries:
         """
 
         cols = ['Year-DOY','mDr','mDrmax','mfDr','mfDrmax',
-                'mSWCr','mSWCrmax','mKs']
+                'mSWCr','mSWCrmax','mKs','mDe']
         summary = pd.DataFrame(columns = cols)
         summary = summary.set_index('Year-DOY')
         for key in sorted(self.swdata.keys()):
@@ -285,6 +285,7 @@ class SoilWaterSeries:
             summary.loc[key,'mSWCr'] = self.swdata[key].mSWCr
             summary.loc[key,'mSWCrmax'] = self.swdata[key].mSWCrmax
             summary.loc[key,'mKs'] = self.swdata[key].mKs
+            summary.loc[key,'mDe'] = self.swdata[key].mDe
         return summary
 
     class SoilWaterProfile:
@@ -362,6 +363,7 @@ class SoilWaterSeries:
             self.Zr = Zr
             self.mDr = float('NaN')
             self.mDrmax = float('NaN')
+            self.mDe = float('NaN')
             self.mfDr = float('NaN')
             self.mfDrmax = float('NaN')
             self.mSWCr = float('NaN')
@@ -379,10 +381,10 @@ class SoilWaterSeries:
             for key in sorted(self.mvswc.keys()):
                 s += '{:5.3f} '.format(self.mvswc[key])
             s += ('{:5.3f} {:8.3f} {:8.3f} {:6.3f} {:7.3f} '
-                  '{:5.3f} {:8.3f} {:6.3f}'
+                  '{:5.3f} {:8.3f} {:6.3f} {:8.3f}'
                  ).format(self.Zr,self.mDr,self.mDrmax,self.mfDr,
                           self.mfDrmax,self.mSWCr,self.mSWCrmax,
-                          self.mKs)
+                          self.mKs,self.mDe)
             return s
 
         def getZr(self, mdl):
@@ -433,6 +435,10 @@ class SoilWaterSeries:
             WPrmax = 0.
             SWCr = 0.
             SWCrmax = 0.
+            #Evaporation layer (0-Ze) for measured depletion mDe
+            ze = int(self.par.Ze * 100000.) #10^-5 meters
+            FCe = 0.
+            SWCe = 0.
 
             #Iterate the max root zone depth in 10^-5 m increments
             inc_dpth = 0.01 #mm
@@ -458,10 +464,16 @@ class SoilWaterSeries:
                     FCr  += FCinc #mm
                     WPr  += WPinc #mm
                     SWCr += SWCinc #mm
+                if inc <= ze:
+                    FCe  += FCinc #mm
+                    SWCe += SWCinc #mm
 
             #Finalize water status metrics
             self.mDr = FCr - SWCr #mm
             self.mDrmax = FCrmax - SWCrmax #mm
+            #Measured evaporation layer depletion (mDe, mm); the model
+            #limits it to TEW
+            self.mDe = FCe - SWCe #mm
             self.mfDr = (FCr - SWCr) / (FCr - WPr) #mm/mm
             self.mfDrmax = (FCrmax-SWCrmax)/(FCrmax-WPrmax) #mm/mm
             self.mSWCr = SWCr / (rz * inc_dpth) #cm3/cm3
