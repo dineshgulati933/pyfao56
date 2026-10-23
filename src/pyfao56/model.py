@@ -47,6 +47,9 @@ The model.py module contains the following:
 01/29/2025 Added Kcb weather-based adjustment method (FAO-56 Eq. 70)
 02/04/2025 Updated ET terminology based on DeJonge et al. (2025)
 07/09/2025 Added Ksend computation for end of timestep
+10/22/2026 Ported from the 1.3.0-based fork (DG): assimilation of
+           measured depletion (mDr, mDrmax), observed ET (OETa) and root
+           depth from the daily (updated) Kcb
 ########################################################################
 """
 
@@ -146,12 +149,18 @@ class Model:
             Ks      - Stress coefficient, timestep start, FAO-56 Eq. 84
             Ka      - Actual crop coefficient, FA0-56 Eq. 80
             ETa     - Actual evapotranspiration (mm), FAO-56 Eq. 80
+            OETa    - ET used in the water balance (mm): observed ET
+                      from updates if given, otherwise ETa
             T       - Actual plant transpiration (mm)
             DP      - Deep percolation (mm), FAO-56 Eq. 88
             Dinc    - Depletion increment due to root growth (mm)
             Dr      - Soil water depletion (mm), FAO-56 Eqs. 85 & 86
+            mDr     - Assimilated root zone depletion (mm): measured
+                      depletion from updates if given, otherwise Dr
             fDr     - Fractional root zone soil water depletion (mm/mm)
             Drmax   - Soil water depletion for max root depth (mm)
+            mDrmax  - Assimilated depletion for max root depth (mm):
+                      measured from updates if given, otherwise Drmax
             fDrmax  - Fractional depletion for max root depth (mm/mm)
             Db      - Soil water depletion in the bottom layer (mm)
             fDb     - Fractional depletion in the bottom layer (mm/mm)
@@ -243,9 +252,9 @@ class Model:
                        'tKcb','Kcb','ETcb','h','Kcmax','ETmax','fc','fw',
                        'few','De','Kr','Ke','E','DPe','Kc','ETc','TAW',
                        'TAWrmax','TAWb','Zr','p','RAW','Ks','Ka','ETa',
-                       'T','DP','Dinc','Dr','fDr','Drmax','fDrmax','Db',
-                       'fDb','Ksend','Irrig','IrrLoss','Rain','Runoff',
-                       'Year','DOY','DOW','Date']
+                       'OETa','T','DP','Dinc','Dr','mDr','fDr','Drmax',
+                       'mDrmax','fDrmax','Db','fDb','Ksend','Irrig',
+                       'IrrLoss','Rain','Runoff','Year','DOY','DOW','Date']
         self.odata = pd.DataFrame(columns=self.cnames)
 
     def __str__(self):
@@ -277,9 +286,12 @@ class Model:
                 'Zr':'{:5.3f}'.format,'p':'{:5.3f}'.format,
                 'RAW':'{:7.3f}'.format,'Ks':'{:5.3f}'.format,
                 'Ka':'{:5.3f}'.format,'ETa':'{:6.3f}'.format,
+                'OETa':'{:6.3f}'.format,
                 'T':'{:6.3f}'.format,'DP':'{:7.3f}'.format,
                 'Dinc':'{:7.3f}'.format,'Dr':'{:7.3f}'.format,
+                'mDr':'{:7.3f}'.format,
                 'fDr':'{:7.3f}'.format,'Drmax':'{:7.3f}'.format,
+                'mDrmax':'{:7.3f}'.format,
                 'fDrmax':'{:7.3f}'.format,'Db':'{:7.3f}'.format,
                 'fDb':'{:7.3f}'.format,'Ksend':'{:5.3f}'.format,
                 'Irrig':'{:7.3f}'.format,'IrrLoss':'{:7.3f}'.format,
@@ -300,7 +312,8 @@ class Model:
              '  tKcb   Kcb   ETcb     h Kcmax  ETmax    fc    fw   few'
              '      De    Kr    Ke      E     DPe    Kc    ETc     TAW'
              ' TAWrmax    TAWb    Zr     p     RAW    Ks    Ka    ETa'
-             '      T      DP    Dinc      Dr     fDr   Drmax  fDrmax'
+             '   OETa      T      DP    Dinc      Dr     mDr     fDr'
+             '   Drmax  mDrmax  fDrmax'
              '      Db     fDb Ksend   Irrig IrrLoss    Rain  Runoff'
              '  Year  DOY  DOW      Date\n'
              ).format(ast,
@@ -508,6 +521,10 @@ class Model:
             io.Ksend=sorted([0.0,(io.TAW-io.Dr)/(io.TAW-io.RAW),1.0])[1]
         io.Ka = io.Kcmini
         self.odata = pd.DataFrame(columns=self.cnames)
+
+        #Assimilated depletion starts from the simulated initial values
+        io.mDr = io.Dr
+        io.mDrmax = io.Drmax
 
         #Adjustments of Kcmmid (FAO-56 Eq. 62), Kcmend (FAO-56 Eq. 65),
         #and Kcbmid and Kcbend (FAO-56 Eq. 70) based on minimum relative
@@ -734,14 +751,21 @@ class Model:
                     io.idep=rate
                     break
 
-            #Obtain updates for Kcb, h, and fc, if available
+            #Obtain updates for Kcb, h, fc, OETa, mDr and mDrmax, if
+            #available
             io.updKcb = float('NaN')
             io.updh = float('NaN')
             io.updfc = float('NaN')
+            io.updOETa = float('NaN')
+            io.updmDr = float('NaN')
+            io.updmDrmax = float('NaN')
             if self.upd is not None:
                 io.updKcb = self.upd.getdata(mykey,'Kcb')
                 io.updh = self.upd.getdata(mykey,'h')
                 io.updfc = self.upd.getdata(mykey,'fc')
+                io.updOETa = self.upd.getdata(mykey,'OETa')
+                io.updmDr = self.upd.getdata(mykey,'mDr')
+                io.updmDrmax = self.upd.getdata(mykey,'mDrmax')
 
             #Advance timestep
             self._advance(io)
@@ -755,8 +779,9 @@ class Model:
                     io.tKcb, io.Kcb, io.ETcb, io.h, io.Kcmax, io.ETmax,
                     io.fc, io.fw, io.few, io.De, io.Kr, io.Ke, io.E,
                     io.DPe, io.Kc, io.ETc, io.TAW, io.TAWrmax, io.TAWb,
-                    io.Zr, io.p, io.RAW, io.Ks, io.Ka, io.ETa, io.T,
-                    io.DP, io.Dinc, io.Dr, io.fDr, io.Drmax, io.fDrmax,
+                    io.Zr, io.p, io.RAW, io.Ks, io.Ka, io.ETa, io.OETa,
+                    io.T, io.DP, io.Dinc, io.Dr, io.mDr, io.fDr,
+                    io.Drmax, io.mDrmax, io.fDrmax,
                     io.Db, io.fDb, io.Ksend, io.idep, io.irrloss,
                     io.rain, io.runoff, year, doy, dow, dat]
             self.odata.loc[mykey] = data
@@ -839,7 +864,8 @@ class Model:
         if io.updh > 0: io.h = io.updh
 
         #Root depth (Zr, m) - FAO-56 page 279
-        io.Zr = max([io.Zrini + (io.Zrmax-io.Zrini)*(io.tKcb-io.Kcbini)/
+        #Uses Kcb (not tKcb) so roots follow Kcb updates, like h above
+        io.Zr = max([io.Zrini + (io.Zrmax-io.Zrini)*(io.Kcb-io.Kcbini)/
                      (io.Kcbmid-io.Kcbini),0.001,io.Zr])
 
         #Maximum or upper limit crop coefficient (Kcmax) - FAO-56 Eq. 72
@@ -979,23 +1005,34 @@ class Model:
         #Actual plant transpiration (T, mm)
         io.T = (io.Ks * io.Kcb) * io.ETref
 
-        #Water balance methods
+        #Actual evapotranspiration for the water balance (OETa, mm):
+        #observed ET when updates are available, otherwise ETa
+        io.OETa = io.ETa
+        if io.updOETa > 0: io.OETa = io.updOETa
+
+        #Water balance methods. The balance carries the assimilated
+        #depletion (mDr, mDrmax) forward; on days with measured depletion
+        #it replaces the simulated value (Dr, Drmax).
         if io.solmthd == 'D':
             #Deep percolation (DP, mm) - FAO-56 Eq. 88
             #Boundary layer is considered at the root zone depth (Zr)
-            DP = effrain + effirr - io.ETa - io.Dr
+            DP = effrain + effirr - io.OETa - io.mDr
             io.DP = max([DP,0.0])
 
             #Root zone soil water depletion (Dr,mm) - FAO-56 Eqs.85 & 86
-            Dr = io.Dr - effrain - effirr + io.ETa + io.DP
+            Dr = io.mDr - effrain - effirr + io.OETa + io.DP
             io.Dr = sorted([0.0, Dr, io.TAW])[1]
 
+            #Assimilated root zone depletion (mDr, mm)
+            io.mDr = io.updmDr if pd.notna(io.updmDr) else io.Dr
+
             #Root zone soil water depletion fraction (fDr, mm/mm)
-            io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
+            io.fDr = 1.0 - ((io.TAW - io.mDr) / io.TAW)
 
             #By default, FAO-56 doesn't consider the following variables
             io.Dinc = -99.999
             io.Drmax = -99.999
+            io.mDrmax = -99.999
             io.fDrmax = -99.999
             io.Db = -99.999
             io.fDb = -99.999
@@ -1003,7 +1040,7 @@ class Model:
         elif io.solmthd == 'L':
             #Deep percolation (DP, mm)
             #Boundary layer is at the max root depth (Zrmax)
-            DP = effrain + effirr - io.ETa - io.Drmax
+            DP = effrain + effirr - io.OETa - io.mDrmax
             io.DP = max([DP,0.0])
 
             #Depletion increment due to root growth (Dinc, mm)
@@ -1014,21 +1051,27 @@ class Model:
                 io.Dinc = 0.0
 
             #Root zone soil water depletion (Dr, mm)
-            Dr = io.Dr - effrain - effirr + io.ETa + io.Dinc
+            Dr = io.mDr - effrain - effirr + io.OETa + io.Dinc
             io.Dr = sorted([0.0, Dr, io.TAW])[1]
 
+            #Assimilated root zone depletion (mDr, mm)
+            io.mDr = io.updmDr if pd.notna(io.updmDr) else io.Dr
+
             #Root zone soil water depletion fraction (fDr, mm/mm)
-            io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
+            io.fDr = 1.0 - ((io.TAW - io.mDr) / io.TAW)
 
             #Soil water depletion at max root depth (Drmax, mm)
-            Drmax = io.Drmax - effrain - effirr + io.ETa + io.DP
+            Drmax = io.mDrmax - effrain - effirr + io.OETa + io.DP
             io.Drmax = sorted([0.0, Drmax, io.TAWrmax])[1]
 
+            #Assimilated depletion at max root depth (mDrmax, mm)
+            io.mDrmax = io.updmDrmax if pd.notna(io.updmDrmax) else io.Drmax
+
             #Soil water depletion fraction at Zrmax (fDrmax, mm/mm)
-            io.fDrmax = 1.0 - ((io.TAWrmax - io.Drmax) / io.TAWrmax)
+            io.fDrmax = 1.0 - ((io.TAWrmax - io.mDrmax) / io.TAWrmax)
 
             #Soil water depletion in the bottom layer (Db, mm)
-            Db = io.Drmax - io.Dr
+            Db = io.mDrmax - io.mDr
             io.Db = sorted([0.0, Db, io.TAWb])[1]
 
             #Bottom layer soil water depletion fraction (fDb, mm/mm)
