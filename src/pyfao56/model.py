@@ -985,14 +985,14 @@ class Model:
         #Transpiration reduction factor
         if io.aq_Ks is True:
             #Ks method from AquaCrop
-            rSWD = io.Dr/io.TAW
+            rSWD = io.mDr/io.TAW
             Drel = (rSWD-io.p)/(1.0-io.p)
             sf = 1.5
             aqKs = 1.0-(math.exp(sf*Drel)-1.0)/(math.exp(sf)-1.0)
             io.Ks = sorted([0.0, aqKs, 1.0])[1]
         else:
             #FAO-56 Eq. 84
-            io.Ks = sorted([0.0,(io.TAW-io.Dr)/(io.TAW-io.RAW),1.0])[1]
+            io.Ks = sorted([0.0,(io.TAW-io.mDr)/(io.TAW-io.RAW),1.0])[1]
 
         #Actual crop coefficient (Ka) - FAO-56 Eq. 80
         #DeJonge et al. (2025) updates terminology: Kcadj to Ka
@@ -1084,11 +1084,11 @@ class Model:
         #Transpiration reduction factor
         if io.aq_Ks is True:
             #Ks method from AquaCrop
-            rSWD = io.Dr/io.TAW
+            rSWD = io.mDr/io.TAW
             Drel = (rSWD-io.p)/(1.0-io.p)
             sf = 1.5
             aqKs = 1.0-(math.exp(sf*Drel)-1.0)/(math.exp(sf)-1.0)
             io.Ksend = sorted([0.0, aqKs, 1.0])[1]
         else:
             #FAO-56 Eq. 84
-            io.Ksend=sorted([0.0,(io.TAW-io.Dr)/(io.TAW-io.RAW),1.0])[1]
+            io.Ksend=sorted([0.0,(io.TAW-io.mDr)/(io.TAW-io.RAW),1.0])[1]
