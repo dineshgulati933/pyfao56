@@ -96,6 +96,10 @@ class Model:
         If True, Kcmmid, Kcmend, Kcbmid, and Kcbend are adjusted for
         weather following FAO-56 Eqs. 62, 65, and 70
         (default = False)
+    De_fc : boolean, optional
+        If False, the evaporation layer starts fully depleted
+        (De = TEW); if True, it starts at field capacity (De = 0)
+        (default = False)
     comment : str, optional
         User-defined file descriptions or metadata (default = '')
     tmstmp : datetime
@@ -183,7 +187,7 @@ class Model:
 
     def __init__(self, start, end, par, wth, irr=None, autoirr=None,
                  sol=None, upd=None, roff=False, cons_p=False,
-                 aq_Ks=False, K_adj=False, comment=''):
+                 aq_Ks=False, K_adj=False, De_fc=False, comment=''):
         """Initialize the Model class attributes.
 
         Parameters
@@ -221,6 +225,10 @@ class Model:
             If True, Kcmmid, Kcmend, Kcbmid, and Kcbend are adjusted for
             weather following FAO-56 Eqs. 62, 65, and 70
             (default = False)
+        De_fc : boolean, optional
+            If False, the evaporation layer starts fully depleted
+            (De = TEW); if True, it starts at field capacity (De = 0)
+            (default = False)
         comment : str, optional
             User-defined file descriptions or metadata (default = '')
         """
@@ -237,6 +245,7 @@ class Model:
         self.cons_p = cons_p
         self.aq_Ks = aq_Ks
         self.K_adj = K_adj
+        self.De_fc = De_fc
         self.comment = 'Comments: ' + comment.strip()
         self.tmstmp = datetime.datetime.now()
         self.cnames = ['Year','DOY','DOW','Date','ETref','Kcm','ETcm',
@@ -482,6 +491,9 @@ class Model:
             io.Db = io.Drmax - io.Dr
             #Initial total available water in bottom layer (TAWb, mm)
             io.TAWb = io.TAWrmax - io.TAW
+        #Evaporation layer starts at field capacity, if requested
+        if self.De_fc is True:
+            io.De = 0.
         #Initial root zone soil water depletion fraction (fDr, mm/mm)
         io.fDr = 1.0 - ((io.TAW - io.Dr) / io.TAW)
         io.h = io.hini
