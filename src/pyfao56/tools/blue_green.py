@@ -94,8 +94,9 @@ class BlueGreen:
     Caution on OETa: when observed ET is supplied through the Update
     class, OETa is the observed value, but E and T remain the modelled
     values. E + T then no longer equals OETa, and E_ep + T_ep no longer
-    equals ETa_ep (likewise for AW). The Model ignores an observed ET of
-    exactly 0 (it keeps the modelled ETa when the update is not > 0).
+    equals ETa_ep (likewise for AW). The Model takes an observed ET of 0
+    or below as 0; only a missing (NaN) observed ET falls back to the
+    modelled ETa (since f0a2018, 11/09/2026).
 
     Caution on the column name: the output columns keep the names 'ETa',
     'ETa_ep' and 'ETa_aw' for compatibility, but they hold OETa and its
