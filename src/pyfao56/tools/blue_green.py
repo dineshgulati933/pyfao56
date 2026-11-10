@@ -18,6 +18,9 @@ The blue_green.py module contains the following:
 
 11/20/2025 Initial code developed by Gulati & Kukal, University of Idaho
 02/09/2026 Reformatted code for incorporation into pyfao56
+11/09/2026 Storage from the assimilated depletion (mDr) and pools
+           drained by the ET used in the water balance (OETa), for the
+           assimilation fork (DG)
 ########################################################################
 """
 
@@ -55,7 +58,7 @@ class BlueGreen:
            S         - Total available water (mm)
            Sep       - S attributed to effective precipitation (mm)
            Saw       - S attributed to applied water (mm)
-           ETa       - Actual evapotranspiration (mm)
+           ETa       - ET used in the water balance (Model OETa, mm)
            ETa_ep    - ETa attributed to effective precipitation (mm)
            ETa_aw    - ETa attributed to applied water (mm)
            E         - Soil water evaporation (mm)
@@ -79,6 +82,25 @@ class BlueGreen:
         Save the formatted blue-green partitioned results to a text file
     plot(var='ETa', filename=None)
         Plot time series of a variable and its EP and AW components
+
+    Notes
+    -----
+    11/09/2026: S is computed from the assimilated depletion (mDr), and
+    the EP and AW storages are drained by OETa, the ET the Model uses in
+    its water balance. Without measured depletion, mDr equals Dr;
+    without observed ET, OETa equals ETa. Runs without updates therefore
+    give the same result as with Dr and ETa.
+
+    Caution on OETa: when observed ET is supplied through the Update
+    class, OETa is the observed value, but E and T remain the modelled
+    values. E + T then no longer equals OETa, and E_ep + T_ep no longer
+    equals ETa_ep (likewise for AW). The Model ignores an observed ET of
+    exactly 0 (it keeps the modelled ETa when the update is not > 0).
+
+    Caution on the column name: the output columns keep the names 'ETa',
+    'ETa_ep' and 'ETa_aw' for compatibility, but they hold OETa and its
+    parts. With observed ET they are not the modelled ETa; label them
+    accordingly in tables and figures.
     """
 
     def __init__(self, mdl, cg=0.5, cb=0.5, comment=''):
@@ -88,8 +110,8 @@ class BlueGreen:
         ----------
         mdl : pyfao56 Model object
            Object with `odata` DataFrame attribute indexed as YYYY-DOY
-           and containing: ['Year', 'DOY', 'Date', 'ETa', 'E', 'T', 
-           'Runoff', 'DP', 'Rain', 'Irrig', 'TAW', 'Dr']
+           and containing: ['Year', 'DOY', 'Date', 'OETa', 'E', 'T',
+           'Runoff', 'DP', 'Rain', 'Irrig', 'TAW', 'mDr']
         cg : float, optional
            Initial fraction of effective precipitation (green water) in
            available soil water storage
@@ -131,7 +153,7 @@ class BlueGreen:
         Win_sy : float
             Secondary wetting influx (e.g., rainfall for EP)
         ETa : float
-            Actual evapotranspiration (ETa, mm)
+            ET used in the water balance (Model OETa, mm)
         RO : float
             Runoff (mm)
         DP : float
@@ -161,15 +183,17 @@ class BlueGreen:
         sep, saw = 0.0, 0.0  # initialize EP and AW storage
 
         for idx, row in df.iterrows():
-            ETa = row['ETa']
+            #ET used in the water balance (= ETa unless observed ET)
+            ETa = row['OETa']
             RO = row['Runoff']
             DP = row['DP']
             Rain = row['Rain']
             Irrig = row['Irrig']
             #Available soil water from previous day
             S_prev = S if idx > self.startDate.strftime('%Y-%j') else 0.
-            #Available soil water from current day
-            S = row['TAW'] - row['Dr']
+            #Available soil water from current day, from the assimilated
+            #depletion (= Dr on days without measured depletion)
+            S = row['TAW'] - row['mDr']
             E = row['E']
             T = row['T']
 
