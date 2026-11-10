@@ -50,6 +50,8 @@ The model.py module contains the following:
 10/22/2026 Ported from the 1.3.0-based fork (DG): assimilation of
            measured depletion (mDr, mDrmax), observed ET (OETa) and root
            depth from the daily (updated) Kcb
+11/09/2026 Observed ET of 0 or below taken as 0 instead of falling back
+           to the modelled ETa; only missing observed ET falls back (DG)
 ########################################################################
 """
 
@@ -150,7 +152,8 @@ class Model:
             Ka      - Actual crop coefficient, FA0-56 Eq. 80
             ETa     - Actual evapotranspiration (mm), FAO-56 Eq. 80
             OETa    - ET used in the water balance (mm): observed ET
-                      from updates if given, otherwise ETa
+                      from updates if given (0 or below taken as 0),
+                      otherwise ETa
             T       - Actual plant transpiration (mm)
             DP      - Deep percolation (mm), FAO-56 Eq. 88
             Dinc    - Depletion increment due to root growth (mm)
@@ -1006,9 +1009,10 @@ class Model:
         io.T = (io.Ks * io.Kcb) * io.ETref
 
         #Actual evapotranspiration for the water balance (OETa, mm):
-        #observed ET when updates are available, otherwise ETa
+        #observed ET when updates are available, otherwise ETa; an
+        #observed ET of 0 or below is a measurement, taken as 0
         io.OETa = io.ETa
-        if io.updOETa > 0: io.OETa = io.updOETa
+        if pd.notna(io.updOETa): io.OETa = max(0., io.updOETa)
 
         #Water balance methods. The balance carries the assimilated
         #depletion (mDr, mDrmax) forward; on days with measured depletion
